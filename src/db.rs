@@ -374,6 +374,16 @@ impl DB {
         }
     }
 
+    pub fn close(&self) -> Result<(), Error> {
+        unsafe {
+            for cf in self.cfs.values() {
+                ffi::rocksdb_column_family_handle_destroy(cf.inner);
+            }
+            ffi::rocksdb_close(self.inner);
+            Ok(())
+        }
+    }
+
     pub fn destroy<P: AsRef<Path>>(opts: &Options, path: P) -> Result<(), Error> {
         let cpath = to_cpath(path)?;
         unsafe {
