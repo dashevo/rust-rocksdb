@@ -41,7 +41,7 @@ pub struct DB {
     pub(crate) inner: *mut ffi::rocksdb_t,
     cfs: BTreeMap<String, ColumnFamily>,
     path: PathBuf,
-    is_closed: bool,
+    pub is_closed: bool,
 }
 
 // Safety note: auto-implementing Send on most db-related types is prevented by the inner FFI
