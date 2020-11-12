@@ -41,6 +41,7 @@ pub struct DB {
     pub(crate) inner: *mut ffi::rocksdb_t,
     cfs: BTreeMap<String, ColumnFamily>,
     path: PathBuf,
+    is_closed: bool,
 }
 
 // Safety note: auto-implementing Send on most db-related types is prevented by the inner FFI
@@ -107,6 +108,7 @@ impl DB {
             inner: db,
             cfs: BTreeMap::new(),
             path: path.as_ref().to_path_buf(),
+            is_closed: false,
         })
     }
 
@@ -270,6 +272,7 @@ impl DB {
             inner: db,
             cfs: cf_map,
             path: path.as_ref().to_path_buf(),
+            is_closed: false,
         })
     }
 
@@ -374,12 +377,13 @@ impl DB {
         }
     }
 
-    pub fn close(&self) -> Result<(), Error> {
+    pub fn close(&mut self) -> Result<(), Error> {
         unsafe {
             for cf in self.cfs.values() {
                 ffi::rocksdb_column_family_handle_destroy(cf.inner);
             }
             ffi::rocksdb_close(self.inner);
+            self.is_closed = true;
             Ok(())
         }
     }
@@ -1333,7 +1337,7 @@ impl DB {
     /// entirely in the range.
     ///
     /// Note: L0 files are left regardless of whether they're in the range.
-    ///  
+    ///
     /// Snapshots before the delete might not see the data in the given range.
     pub fn delete_file_in_range<K: AsRef<[u8]>>(&self, from: K, to: K) -> Result<(), Error> {
         let from = from.as_ref();
@@ -1382,11 +1386,13 @@ impl DB {
 
 impl Drop for DB {
     fn drop(&mut self) {
-        unsafe {
-            for cf in self.cfs.values() {
-                ffi::rocksdb_column_family_handle_destroy(cf.inner);
+        if !self.is_closed {
+            unsafe {
+                for cf in self.cfs.values() {
+                    ffi::rocksdb_column_family_handle_destroy(cf.inner);
+                }
+                ffi::rocksdb_close(self.inner);
             }
-            ffi::rocksdb_close(self.inner);
         }
     }
 }
